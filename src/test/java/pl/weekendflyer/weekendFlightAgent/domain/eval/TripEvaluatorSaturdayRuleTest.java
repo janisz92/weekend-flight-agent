@@ -61,6 +61,24 @@ class TripEvaluatorSaturdayRuleTest {
     }
 
     @Test
+    @DisplayName("Przylot pt 22:00, wylot nd 06:00, brak segmentów w sobotę => true (granica przylotu włączona)")
+    void shouldReturnTrue_whenArrivalFridayExactlyAtThreshold() {
+        // given: przylot piątek 22:00 DOKŁADNIE - granica jest włączona (<=)
+        ZonedDateTime outboundDeparture = ZonedDateTime.of(2026, 1, 16, 19, 0, 0, 0, ROME_ZONE);
+        ZonedDateTime outboundArrival = ZonedDateTime.of(2026, 1, 16, 22, 0, 0, 0, ROME_ZONE); // piątek 22:00 DOKŁADNIE
+        ZonedDateTime inboundDeparture = ZonedDateTime.of(2026, 1, 18, 6, 0, 0, 0, ROME_ZONE); // niedziela 06:00
+        ZonedDateTime inboundArrival = ZonedDateTime.of(2026, 1, 18, 9, 0, 0, 0, ROME_ZONE);
+
+        FlightOffer offer = buildOffer(outboundDeparture, outboundArrival, inboundDeparture, inboundArrival);
+
+        // when
+        boolean result = evaluator.isSaturdayFull(offer, defaultConstraints);
+
+        // then
+        assertTrue(result, "Sobota powinna być uznana za pełną - przylot dokładnie o 22:00 (granica włączona)");
+    }
+
+    @Test
     @DisplayName("Przylot pt 22:01 => false (po progu)")
     void shouldReturnFalse_whenArrivalFridayAfterThreshold() {
         // given: przylot piątek 22:01 - po progu 22:00

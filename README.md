@@ -288,14 +288,14 @@ Oblicza liczbę pełnych dni spędzonych w destynacji.
 
 #### 2. `isSaturdayFull(FlightOffer, TripConstraints)` → boolean
 
-Sprawdza czy sobota spełnia reguły weekendowe.
+Sprawdza czy sobota spełnia reguły weekendowe (zwraca TRUE tylko gdy spełnione są WSZYSTKIE warunki).
 
 **Warunki (wszystkie muszą być spełnione):**
 1. Przylot w **piątek** (w strefie destynacji)
-2. Przylot nie później niż **22:00** (lokalnie)
+2. Przylot nie później niż **22:00** (lokalnie, **włącznie: <=**)
 3. Wylot w **niedzielę** (w strefie destynacji)
-4. Wylot nie wcześniej niż **06:00** (lokalnie)
-5. Jeśli `requireNoFlightOnSaturday=true`: żaden segment nie ma departure/arrival w sobotę
+4. Wylot nie wcześniej niż **06:00** (lokalnie, **włącznie: >=**)
+5. Jeśli `requireNoFlightOnSaturday=true`: **ŻADEN** segment nie ma departure/arrival w sobotę
 
 **Strefy czasowe:**
 Wszystkie sprawdzenia wykonywane w strefie czasowej destynacji. Przykład:
@@ -319,7 +319,7 @@ Sprawdza czy oferta spełnia twarde ograniczenia.
 
 ## 🧪 Testy
 
-Projekt zawiera **32 testy jednostkowe** z pełnym pokryciem logiki ewaluacji.
+Projekt zawiera **33 testy jednostkowe** z pełnym pokryciem logiki ewaluacji.
 
 ### Struktura testów
 
@@ -327,7 +327,7 @@ Projekt zawiera **32 testy jednostkowe** z pełnym pokryciem logiki ewaluacji.
 src/test/java/
 └── pl/weekendflyer/weekendFlightAgent/domain/eval/
     ├── TripEvaluatorFullDaysTest.java          (7 testów)
-    ├── TripEvaluatorSaturdayRuleTest.java     (12 testów)
+    ├── TripEvaluatorSaturdayRuleTest.java     (13 testów)
     └── TripEvaluatorHardConstraintsTest.java  (13 testów)
 ```
 
@@ -354,6 +354,7 @@ src/test/java/
 
 **isSaturdayFull:**
 - ✅ Przylot pt 21:59, wylot nd 06:00 → true (granica)
+- ✅ Przylot pt 22:00, wylot nd 06:00 → true (granica włączona <=)
 - ✅ Przylot pt 22:01 → false (po progu)
 - ✅ Wylot nd 05:59 → false (przed progiem)
 - ✅ Segment z przylotem w sobotę → false

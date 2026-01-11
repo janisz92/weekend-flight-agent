@@ -10,6 +10,7 @@ import pl.weekendflyer.weekendFlightAgent.domain.model.TripConstraints;
 import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.ZonedDateTime;
 import java.util.List;
 
@@ -135,40 +136,48 @@ public class TripEvaluator {
     /**
      * Sprawdza czy sobota jest w pełni wolna od lotów zgodnie z wymogami weekendowymi.
      *
-     * <p><b>Warunki do spełnienia (wszystkie muszą być prawdziwe):</b>
+     * <p><b>Zwraca TRUE</b> tylko gdy oferta spełnia warunek "pełnej soboty", czyli:
      * <ol>
      *   <li><b>Dzień przylotu:</b> Przylot do destynacji musi być w piątek (w strefie destynacji)</li>
      *   <li><b>Godzina przylotu:</b> Przylot nie później niż {@code constraints.latestArrivalOnFridayLocal}
-     *       (np. 22:00 czasu lokalnego destynacji)</li>
+     *       (np. 22:00 czasu lokalnego destynacji, włącznie: <=)</li>
      *   <li><b>Dzień wylotu:</b> Wylot z destynacji musi być w niedzielę (w strefie destynacji)</li>
      *   <li><b>Godzina wylotu:</b> Wylot nie wcześniej niż {@code constraints.earliestDepartureOnSundayLocal}
-     *       (np. 06:00 czasu lokalnego destynacji)</li>
-     *   <li><b>Brak lotów w sobotę (opcjonalnie):</b> Jeśli {@code constraints.requireNoFlightOnSaturday == true},
-     *       to żaden segment (outbound ani inbound) nie może mieć departure ani arrival w sobotę w strefie destynacji</li>
+     *       (np. 06:00 czasu lokalnego destynacji, włącznie: >=)</li>
+     *   <li><b>Brak lotów w sobotę:</b> Jeśli {@code constraints.requireNoFlightOnSaturday == true},
+     *       to ŻADEN segment (outbound ani inbound) nie może mieć departure ani arrival w sobotę w strefie destynacji</li>
      * </ol>
+     *
+     * <p><b>Zwraca FALSE</b> gdy:
+     * <ul>
+     *   <li>Oferta lub constraints są null</li>
+     *   <li>Brak segmentów outbound lub inbound</li>
+     *   <li>Którykolwiek z powyższych warunków nie jest spełniony</li>
+     * </ul>
      *
      * <p><b>Strefy czasowe:</b>
      * <ul>
-     *   <li>Dni tygodnia i godziny są sprawdzane w strefie czasowej destynacji</li>
-     *   <li>Strefa destynacji jest pobierana z {@code offer.outboundArrivalTime().getZone()}</li>
-     *   <li>Wszystkie segmenty są konwertowane do tej strefy przy sprawdzaniu warunku soboty</li>
-     *   <li>Dzięki temu, jeśli lot startuje z WAW o 23:00 pt i ląduje w BCN o 01:00 sob (czasu lokalnego BCN),
-     *       to zostanie wykryty jako lot w sobotę</li>
+     *   <li>Wszystkie porównania dni tygodnia i dat wykonywane w strefie czasowej destynacji</li>
+     *   <li>Strefa destynacji: {@code offer.outboundArrivalTime().getZone()}</li>
+     *   <li>Wszystkie segmenty konwertowane do tej strefy: {@code segmentTime.withZoneSameInstant(destinationZone)}</li>
+     *   <li>Przykład: Lot WAW pt 23:00 → BCN sob 01:00 (czas BCN) = wykryty jako lot w sobotę → false</li>
      * </ul>
      *
      * <p><b>Przykłady:</b>
      * <ul>
-     *   <li>Przylot pt 21:59, wylot nd 06:00, brak lotów w sobotę → true</li>
-     *   <li>Przylot pt 22:01 → false (po progu)</li>
-     *   <li>Wylot nd 05:59 → false (przed progiem)</li>
-     *   <li>Przylot w sobotę 00:10 → false (nie jest piątek + lot w sobotę)</li>
+     *   <li>Przylot pt 21:59, wylot nd 06:00, brak lotów w sobotę → <b>true</b> (pełna sobota)</li>
+     *   <li>Przylot pt 22:00, wylot nd 06:00, brak lotów w sobotę → <b>true</b> (granica włączona)</li>
+     *   <li>Przylot pt 22:01 → <b>false</b> (po progu)</li>
+     *   <li>Wylot nd 05:59 → <b>false</b> (przed progiem)</li>
+     *   <li>Jakikolwiek segment z departure/arrival w sobotę → <b>false</b> (wymóg requireNoFlightOnSaturday)</li>
      * </ul>
      *
-     * @param offer oferta lotu
+     * @param offer oferta lotu (musi zawierać outboundSegments i inboundSegments)
      * @param constraints ograniczenia zawierające progi czasowe i flagę requireNoFlightOnSaturday
-     * @return true jeśli sobota spełnia wszystkie wymagania weekendowe, false w przeciwnym razie
+     * @return true jeśli sobota jest w pełni wolna (spełnia wszystkie wymagania), false w przeciwnym razie
      */
     public boolean isSaturdayFull(FlightOffer offer, TripConstraints constraints) {
+        // Walidacja danych wejściowych
         if (offer == null || constraints == null) {
             log.debug("isSaturdayFull: null offer lub constraints, zwracam false");
             return false;
@@ -179,43 +188,34 @@ public class TripEvaluator {
             return false;
         }
 
+        // Pobierz strefę czasową destynacji
+        java.time.ZoneId destZone = destinationZone(offer);
+
+        // Pobierz kluczowe czasy
         ZonedDateTime arrivalAtDestination = offer.outboundArrivalTime();
         ZonedDateTime departureFromDestination = offer.inboundSegments().get(0).departureTime();
 
-        // Warunek b) przylot do destynacji nie później niż latestArrivalOnFridayLocal w piątek
-        LocalDate arrivalLocalDate = arrivalAtDestination.toLocalDate();
-        if (arrivalLocalDate.getDayOfWeek() != DayOfWeek.FRIDAY) {
-            log.debug("isSaturdayFull: przylot nie jest w piątek ({}), zwracam false", arrivalLocalDate.getDayOfWeek());
+        // Sprawdź warunek: brak lotów w sobotę (jeśli wymagane)
+        if (constraints.requireNoFlightOnSaturday() && hasAnyFlightOnSaturday(offer, destZone)) {
+            log.debug("isSaturdayFull: wykryto lot w sobotę, zwracam false");
             return false;
         }
 
-        if (arrivalAtDestination.toLocalTime().isAfter(constraints.latestArrivalOnFridayLocal())) {
-            log.debug("isSaturdayFull: przylot w piątek po {}, zwracam false", constraints.latestArrivalOnFridayLocal());
+        // Sprawdź warunek: przylot w piątek przed lub o określonej godzinie
+        if (!isFridayBeforeOrAt(arrivalAtDestination, constraints.latestArrivalOnFridayLocal(), destZone)) {
+            log.debug("isSaturdayFull: przylot nie spełnia warunku piątek <= {}, zwracam false",
+                    constraints.latestArrivalOnFridayLocal());
             return false;
         }
 
-        // Warunek c) wylot z destynacji nie wcześniej niż earliestDepartureOnSundayLocal w niedzielę
-        LocalDate departureLocalDate = departureFromDestination.toLocalDate();
-        if (departureLocalDate.getDayOfWeek() != DayOfWeek.SUNDAY) {
-            log.debug("isSaturdayFull: wylot powrotny nie jest w niedzielę ({}), zwracam false", departureLocalDate.getDayOfWeek());
+        // Sprawdź warunek: wylot w niedzielę o lub po określonej godzinie
+        if (!isSundayAtOrAfter(departureFromDestination, constraints.earliestDepartureOnSundayLocal(), destZone)) {
+            log.debug("isSaturdayFull: wylot nie spełnia warunku niedziela >= {}, zwracam false",
+                    constraints.earliestDepartureOnSundayLocal());
             return false;
         }
 
-        if (departureFromDestination.toLocalTime().isBefore(constraints.earliestDepartureOnSundayLocal())) {
-            log.debug("isSaturdayFull: wylot w niedzielę przed {}, zwracam false", constraints.earliestDepartureOnSundayLocal());
-            return false;
-        }
-
-        // Warunek a) jeśli requireNoFlightOnSaturday == true, żaden segment nie może mieć departure/arrival w sobotę
-        if (constraints.requireNoFlightOnSaturday()) {
-            boolean hasFlightOnSaturday = hasAnySegmentOnSaturday(offer, arrivalAtDestination.getZone());
-            if (hasFlightOnSaturday) {
-                log.debug("isSaturdayFull: wykryto lot w sobotę, zwracam false");
-                return false;
-            }
-        }
-
-        log.debug("isSaturdayFull: wszystkie warunki spełnione, zwracam true");
+        log.debug("isSaturdayFull: wszystkie warunki spełnione, zwracam true (pełna sobota)");
         return true;
     }
 
@@ -236,15 +236,6 @@ public class TripEvaluator {
      *       Jeśli null, to brak ograniczenia cenowego.</li>
      * </ol>
      *
-     * <p><b>Obliczanie czasu trwania one-way:</b>
-     * Czas trwania to różnica między:
-     * <ul>
-     *   <li>Start: {@code segments.get(0).departureTime()} - wylot z pierwszego lotniska</li>
-     *   <li>End: {@code segments.get(last).arrivalTime()} - przylot na ostatnie lotnisko</li>
-     *   <li>Używamy {@code Duration.between(start, end).toMinutes()}</li>
-     *   <li>Uwzględnia to automatycznie wszystkie przesiadki i strefy czasowe</li>
-     * </ul>
-     *
      * <p><b>Przykłady:</b>
      * <ul>
      *   <li>1 segment 2h, cena 1500, maxStops=1, maxDuration=480, cap=2000 → true</li>
@@ -259,6 +250,7 @@ public class TripEvaluator {
      * @return true jeśli wszystkie ograniczenia spełnione, false jeśli którekolwiek naruszono lub brak danych
      */
     public boolean meetsHardConstraints(FlightOffer offer, TripConstraints constraints) {
+        // Walidacja danych wejściowych
         if (offer == null || constraints == null) {
             log.debug("meetsHardConstraints: null offer lub constraints, zwracam false");
             return false;
@@ -274,44 +266,20 @@ public class TripEvaluator {
             return false;
         }
 
-        // Sprawdzenie maxStops (dla każdego kierunku osobno)
-        // Liczba przesiadek = liczba segmentów - 1
-        // Przykład: 2 segmenty = 1 przesiadka, 3 segmenty = 2 przesiadki
-        int outboundStops = offer.outboundSegments().size() - 1;
-        int inboundStops = offer.inboundSegments().size() - 1;
-
-        if (outboundStops > constraints.maxStops()) {
-            log.debug("meetsHardConstraints: za dużo przesiadek outbound ({} > {})", outboundStops, constraints.maxStops());
+        // Sprawdź ograniczenie liczby przesiadek
+        if (!withinStops(offer.outboundSegments(), constraints.maxStops(), "outbound") ||
+            !withinStops(offer.inboundSegments(), constraints.maxStops(), "inbound")) {
             return false;
         }
 
-        if (inboundStops > constraints.maxStops()) {
-            log.debug("meetsHardConstraints: za dużo przesiadek inbound ({} > {})", inboundStops, constraints.maxStops());
+        // Sprawdź ograniczenie czasu trwania
+        if (!withinDuration(offer.outboundSegments(), constraints.maxTotalDurationMinutesOneWay(), "outbound") ||
+            !withinDuration(offer.inboundSegments(), constraints.maxTotalDurationMinutesOneWay(), "inbound")) {
             return false;
         }
 
-        // Sprawdzenie maxTotalDurationMinutesOneWay
-        // Czas liczony od departure pierwszego segmentu do arrival ostatniego segmentu
-        // Uwzględnia czas lotu + czas oczekiwania na przesiadki
-        long outboundDuration = durationMinutes(offer.outboundSegments());
-        long inboundDuration = durationMinutes(offer.inboundSegments());
-
-        if (outboundDuration > constraints.maxTotalDurationMinutesOneWay()) {
-            log.debug("meetsHardConstraints: za długi czas outbound ({} > {} min)",
-                    outboundDuration, constraints.maxTotalDurationMinutesOneWay());
-            return false;
-        }
-
-        if (inboundDuration > constraints.maxTotalDurationMinutesOneWay()) {
-            log.debug("meetsHardConstraints: za długi czas inbound ({} > {} min)",
-                    inboundDuration, constraints.maxTotalDurationMinutesOneWay());
-            return false;
-        }
-
-        // Sprawdzenie hardCapPricePln
-        if (constraints.hardCapPricePln() != null && offer.pricePln() > constraints.hardCapPricePln()) {
-            log.debug("meetsHardConstraints: cena za wysoka ({} > {})",
-                    offer.pricePln(), constraints.hardCapPricePln());
+        // Sprawdź ograniczenie cenowe
+        if (!withinPriceCap(offer.pricePln(), constraints.hardCapPricePln())) {
             return false;
         }
 
@@ -323,10 +291,12 @@ public class TripEvaluator {
      * Oblicza całkowity czas trwania podróży w minutach od startu pierwszego segmentu
      * do lądowania ostatniego segmentu.
      *
-     * <p>Czas trwania obejmuje:
+     * <p><b>Definicja "łącznego czasu podróży w jedną stronę":</b>
+     * Czas liczony od departure pierwszego segmentu (start podróży) do arrival ostatniego segmentu (koniec podróży).
+     * Uwzględnia:
      * <ul>
      *   <li>Czas wszystkich lotów</li>
-     *   <li>Czas oczekiwania na przesiadki</li>
+     *   <li>Czas oczekiwania na przesiadki między segmentami</li>
      *   <li>Różnice stref czasowych (automatycznie obsługiwane przez ZonedDateTime)</li>
      * </ul>
      *
@@ -355,8 +325,130 @@ public class TripEvaluator {
     }
 
     /**
+     * Pobiera strefę czasową destynacji z oferty lotu.
+     *
+     * @param offer oferta lotu
+     * @return strefa czasowa destynacji pobrana z przylotu outbound
+     */
+    private java.time.ZoneId destinationZone(FlightOffer offer) {
+        return offer.outboundArrivalTime().getZone();
+    }
+
+    /**
+     * Konwertuje czas do strefy destynacji.
+     *
+     * @param time czas do konwersji
+     * @param destZone strefa czasowa destynacji
+     * @return czas skonwertowany do strefy destynacji
+     */
+    private ZonedDateTime toDest(ZonedDateTime time, java.time.ZoneId destZone) {
+        return time.withZoneSameInstant(destZone);
+    }
+
+    /**
+     * Sprawdza czy dany czas przypada w sobotę w strefie destynacji.
+     *
+     * @param time czas do sprawdzenia
+     * @param destZone strefa czasowa destynacji
+     * @return true jeśli dzień tygodnia to sobota w strefie destynacji
+     */
+    private boolean isSaturday(ZonedDateTime time, java.time.ZoneId destZone) {
+        return toDest(time, destZone).getDayOfWeek() == DayOfWeek.SATURDAY;
+    }
+
+    /**
+     * Sprawdza czy czas przypada w piątek przed lub o określonej godzinie w strefie destynacji.
+     *
+     * @param arrival czas przylotu
+     * @param latestFriday najpóźniejsza dopuszczalna godzina w piątek
+     * @param destZone strefa czasowa destynacji
+     * @return true tylko jeśli lokalny dzień to PIĄTEK i lokalny czas <= latestFriday
+     */
+    private boolean isFridayBeforeOrAt(ZonedDateTime arrival, LocalTime latestFriday, java.time.ZoneId destZone) {
+        ZonedDateTime localArrival = toDest(arrival, destZone);
+        return localArrival.getDayOfWeek() == DayOfWeek.FRIDAY &&
+               !localArrival.toLocalTime().isAfter(latestFriday);
+    }
+
+    /**
+     * Sprawdza czy czas przypada w niedzielę o lub po określonej godzinie w strefie destynacji.
+     *
+     * @param departure czas wylotu
+     * @param earliestSunday najwcześniejsza dopuszczalna godzina w niedzielę
+     * @param destZone strefa czasowa destynacji
+     * @return true tylko jeśli lokalny dzień to NIEDZIELA i lokalny czas >= earliestSunday
+     */
+    private boolean isSundayAtOrAfter(ZonedDateTime departure, LocalTime earliestSunday, java.time.ZoneId destZone) {
+        ZonedDateTime localDeparture = toDest(departure, destZone);
+        return localDeparture.getDayOfWeek() == DayOfWeek.SUNDAY &&
+               !localDeparture.toLocalTime().isBefore(earliestSunday);
+    }
+
+    /**
+     * Oblicza liczbę przesiadek dla listy segmentów.
+     *
+     * @param segments lista segmentów lotu
+     * @return liczba przesiadek (liczba segmentów - 1), minimum 0
+     */
+    private int stops(List<FlightSegment> segments) {
+        return Math.max(0, segments.size() - 1);
+    }
+
+    /**
+     * Sprawdza czy liczba przesiadek mieści się w limicie.
+     *
+     * @param segments lista segmentów lotu
+     * @param maxStops maksymalna dopuszczalna liczba przesiadek
+     * @param direction kierunek lotu (do logowania: "outbound" lub "inbound")
+     * @return true jeśli liczba przesiadek <= maxStops
+     */
+    private boolean withinStops(List<FlightSegment> segments, int maxStops, String direction) {
+        int actualStops = stops(segments);
+        if (actualStops > maxStops) {
+            log.debug("meetsHardConstraints: za dużo przesiadek {} ({} > {})", direction, actualStops, maxStops);
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Sprawdza czy czas trwania podróży mieści się w limicie.
+     *
+     * @param segments lista segmentów lotu
+     * @param maxDurationMinutes maksymalny dopuszczalny czas w minutach
+     * @param direction kierunek lotu (do logowania: "outbound" lub "inbound")
+     * @return true jeśli czas trwania <= maxDurationMinutes
+     */
+    private boolean withinDuration(List<FlightSegment> segments, int maxDurationMinutes, String direction) {
+        long actualDuration = durationMinutes(segments);
+        if (actualDuration > maxDurationMinutes) {
+            log.debug("meetsHardConstraints: za długi czas {} ({} > {} min)", direction, actualDuration, maxDurationMinutes);
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Sprawdza czy cena mieści się w limicie.
+     *
+     * @param pricePln cena w PLN
+     * @param hardCapPricePln limit cenowy (null = brak limitu)
+     * @return true jeśli cena <= hardCapPricePln lub hardCapPricePln jest null
+     */
+    private boolean withinPriceCap(Integer pricePln, Integer hardCapPricePln) {
+        if (hardCapPricePln != null && pricePln > hardCapPricePln) {
+            log.debug("meetsHardConstraints: cena za wysoka ({} > {})", pricePln, hardCapPricePln);
+            return false;
+        }
+        return true;
+    }
+
+    /**
      * Sprawdza czy którykolwiek segment ma departure lub arrival w sobotę
      * w lokalnej strefie czasowej destynacji.
+     *
+     * <p><b>Nazwa metody:</b> "hasAnyFlightOnSaturday" jasno wskazuje, że szukamy lotów w sobotę
+     * (w przeciwieństwie do "isSaturdayFull", która sprawdza czy sobota jest WOLNA od lotów).
      *
      * <p><b>Konwersja stref czasowych:</b>
      * Każdy segment jest konwertowany do strefy czasowej destynacji za pomocą
@@ -367,32 +459,26 @@ public class TripEvaluator {
      * <ul>
      *   <li>Departure: WAW piątek 23:00 (Europe/Warsaw)</li>
      *   <li>Arrival: BCN sobota 01:00 (Europe/Barcelona)</li>
-     *   <li>Po konwersji arrival do strefy BCN → sobota → zwraca true</li>
+     *   <li>Po konwersji arrival do strefy BCN → sobota → zwraca <b>true</b> (lot w sobotę)</li>
      * </ul>
      *
      * @param offer oferta lotu zawierająca segmenty outbound i inbound
      * @param destinationZone strefa czasowa destynacji do której konwertowane są wszystkie czasy
      * @return true jeśli wykryto departure lub arrival w sobotę (w strefie destynacji), false w przeciwnym razie
      */
-    private boolean hasAnySegmentOnSaturday(FlightOffer offer, java.time.ZoneId destinationZone) {
+    private boolean hasAnyFlightOnSaturday(FlightOffer offer, java.time.ZoneId destinationZone) {
         // Sprawdzenie wszystkich segmentów outbound
         for (FlightSegment segment : offer.outboundSegments()) {
-            // Konwertujemy czasy segmentu do strefy destynacji
-            // withZoneSameInstant zachowuje moment w czasie, ale zmienia strefę
-            LocalDate depDate = segment.departureTime().withZoneSameInstant(destinationZone).toLocalDate();
-            LocalDate arrDate = segment.arrivalTime().withZoneSameInstant(destinationZone).toLocalDate();
-
-            if (depDate.getDayOfWeek() == DayOfWeek.SATURDAY || arrDate.getDayOfWeek() == DayOfWeek.SATURDAY) {
+            if (isSaturday(segment.departureTime(), destinationZone) ||
+                isSaturday(segment.arrivalTime(), destinationZone)) {
                 return true;
             }
         }
 
         // Sprawdzenie wszystkich segmentów inbound
         for (FlightSegment segment : offer.inboundSegments()) {
-            LocalDate depDate = segment.departureTime().withZoneSameInstant(destinationZone).toLocalDate();
-            LocalDate arrDate = segment.arrivalTime().withZoneSameInstant(destinationZone).toLocalDate();
-
-            if (depDate.getDayOfWeek() == DayOfWeek.SATURDAY || arrDate.getDayOfWeek() == DayOfWeek.SATURDAY) {
+            if (isSaturday(segment.departureTime(), destinationZone) ||
+                isSaturday(segment.arrivalTime(), destinationZone)) {
                 return true;
             }
         }
