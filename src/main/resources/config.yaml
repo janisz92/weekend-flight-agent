@@ -1,0 +1,56 @@
+agent:
+  timezone: "Europe/Warsaw"
+
+  origins:
+    - "WAW"
+  # opcjonalnie:
+  # - "WMI"
+
+  destinations:
+    # Na start wklej 10–20 kodów IATA
+    - "LIS"
+    - "BCN"
+    - "MAD"
+    - "FCO"
+    - "VCE"
+    - "MLA"
+    - "ATH"
+    - "CPH"
+    - "OSL"
+    - "DUB"
+
+  search:
+    horizonDays: 92
+    fullDaysAllowed: [2, 3, 4]
+
+  # Definicja “pełnej soboty” (czas lokalny destynacji)
+  saturdayRule:
+    requireNoFlightOnSaturday: true
+    latestArrivalOnFridayLocal: "22:00"
+    earliestDepartureOnSundayLocal: "06:00"
+
+  # Ograniczenia “wygody”
+  constraints:
+    maxStops: 1
+    maxTotalDurationMinutesOneWay: 480
+    hardCapPricePLN: 2000
+    earliestDepartureFromOriginLocal: "08:00"
+    latestArrivalToOriginLocal: "23:30"
+
+  # Baseline (do późniejszych etapów)
+  baseline:
+    rollingDays: 30
+    segmentKey:
+      includeDepartureMonth: true
+      includeFullDays: true
+
+  # Pre-filter kandydatów (do późniejszych etapów)
+  candidateFilter:
+    minAbsoluteSavingPLN: 150
+    minPercentBelowMedian: 10
+    maxCandidatesPerRun: 20
+
+  alerts:
+    channel: "TELEGRAM"   # albo EMAIL
+    maxAlertsPerDay: 3
+    maxAlertsPerDestinationPerWeek: 1

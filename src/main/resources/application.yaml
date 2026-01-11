@@ -1,0 +1,12 @@
+spring:
+  application:
+    name: weekend-flight-agent
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+agent:
+  configPath: "classpath:config.yaml"

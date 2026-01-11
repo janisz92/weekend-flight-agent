@@ -1,0 +1,35 @@
+### IntelliJ IDEA ###
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+### Maven ###
+target/
+.mvn/wrapper/maven-wrapper.jar
+
+### Logs ###
+*.log
+
+### OS files ###
+.DS_Store
+Thumbs.db
+
+### Spring Boot ###
+*.pid
+
+### Local environment overrides ###
+application-local.yml
+application-dev-local.yml
+config-local.yml
+
+### Secrets / credentials ###
+.env
+*.env
+*.pem
+*.key
+
+### Temporary files ###
+tmp/
+temp/
