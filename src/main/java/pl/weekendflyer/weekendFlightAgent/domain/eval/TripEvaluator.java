@@ -109,12 +109,18 @@ public class TripEvaluator {
             return 0;
         }
 
-        // Pobieramy czasy przylotu i wylotu w strefie destynacji
-        // Strefa czasowa jest zawarta w ZonedDateTime segmentów
+        // Pobierz strefę czasową destynacji (taki sam sposób jak w isSaturdayFull)
+        java.time.ZoneId destZone = destinationZone(offer);
+
+        // Pobieramy czasy przylotu i wylotu
         ZonedDateTime arrivalAtDestination = offer.outboundArrivalTime();
         ZonedDateTime departureFromDestination = offer.inboundSegments().get(0).departureTime();
 
-        // Konwertujemy na LocalDate w strefie destynacji
+        // Jawnie konwertujemy do strefy destynacji przed obliczeniem LocalDate
+        arrivalAtDestination = arrivalAtDestination.withZoneSameInstant(destZone);
+        departureFromDestination = departureFromDestination.withZoneSameInstant(destZone);
+
+        // Konwertujemy na LocalDate w strefie destynacji (po konwersji)
         LocalDate arrivalLocalDate = arrivalAtDestination.toLocalDate();
         LocalDate departureLocalDate = departureFromDestination.toLocalDate();
 
