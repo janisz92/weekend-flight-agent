@@ -1,11 +1,20 @@
 package pl.weekendflyer.weekendFlightAgent.domain.model;
 
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
 import java.time.Instant;
 import java.time.LocalDate;
 
 @Entity
 @Table(name = "window_check")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 public class WindowCheck {
 
     @Id
@@ -42,96 +51,5 @@ public class WindowCheck {
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
-
-    public WindowCheck() {
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public String getProvider() {
-        return provider;
-    }
-
-    public void setProvider(String provider) {
-        this.provider = provider;
-    }
-
-    public String getOrigin() {
-        return origin;
-    }
-
-    public void setOrigin(String origin) {
-        this.origin = origin;
-    }
-
-    public String getDestination() {
-        return destination;
-    }
-
-    public void setDestination(String destination) {
-        this.destination = destination;
-    }
-
-    public LocalDate getDepartDate() {
-        return departDate;
-    }
-
-    public void setDepartDate(LocalDate departDate) {
-        this.departDate = departDate;
-    }
-
-    public LocalDate getReturnDate() {
-        return returnDate;
-    }
-
-    public void setReturnDate(LocalDate returnDate) {
-        this.returnDate = returnDate;
-    }
-
-    public String getWindowKey() {
-        return windowKey;
-    }
-
-    public void setWindowKey(String windowKey) {
-        this.windowKey = windowKey;
-    }
-
-    public Instant getLastCheckedAt() {
-        return lastCheckedAt;
-    }
-
-    public void setLastCheckedAt(Instant lastCheckedAt) {
-        this.lastCheckedAt = lastCheckedAt;
-    }
-
-    public Integer getCheckCount() {
-        return checkCount;
-    }
-
-    public void setCheckCount(Integer checkCount) {
-        this.checkCount = checkCount;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(Instant createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public Instant getUpdatedAt() {
-        return updatedAt;
-    }
-
-    public void setUpdatedAt(Instant updatedAt) {
-        this.updatedAt = updatedAt;
-    }
 }
 
