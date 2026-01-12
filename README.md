@@ -414,3 +414,50 @@ Projekt powstał jako Weekend Flight Agent dla automatyzacji wyszukiwania tanich
 
 **Status:** 🚧 W aktywnym rozwoju | **Wersja:** 0.0.1-SNAPSHOT | **Java:** 17 | **Spring Boot:** 4.0.1
 
+# PostgreSQL Development Database
+
+## Uruchomienie bazy danych
+
+Aby uruchomić bazę danych Postgres w Docker:
+
+```bash
+docker-compose up -d
+```
+
+## Zatrzymanie bazy danych
+
+```bash
+docker-compose down
+```
+
+## Parametry połączenia
+
+- **Database**: flight_agent
+- **User**: flight_agent
+- **Password**: flight_agent
+- **Port**: 5432
+- **JDBC URL**: jdbc:postgresql://localhost:5432/flight_agent
+
+## Dane
+
+Dane są przechowywane w trwałym volume `postgres_data` i przetrwają restart kontenera.
+
+## Zarządzanie
+
+Uruchomienie:
+```bash
+docker-compose up -d
+```
+
+Zatrzymanie:
+```bash
+docker-compose down
+```
+
+Usunięcie wraz z danymi:
+```bash
+docker-compose down -v
+```
+
+
+

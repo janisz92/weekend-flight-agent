@@ -2,6 +2,26 @@ spring:
   application:
     name: weekend-flight-agent
 
+  datasource:
+    url: jdbc:postgresql://localhost:5432/flight_agent
+    username: flight_agent
+    password: flight_agent
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+
 management:
   endpoints:
     web:
@@ -10,3 +30,4 @@ management:
 
 agent:
   configPath: "classpath:config.yaml"
+
