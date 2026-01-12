@@ -51,5 +51,24 @@ public class WindowCheck {
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    @PrePersist
+    void prePersist() {
+        Instant now = Instant.now();
+        if (createdAt == null) {
+            createdAt = now;
+        }
+        if (updatedAt == null) {
+            updatedAt = now;
+        }
+        if (checkCount == null) {
+            checkCount = 0;
+        }
+    }
+
+    @PreUpdate
+    void preUpdate() {
+        updatedAt = Instant.now();
+    }
 }
 
