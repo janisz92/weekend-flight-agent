@@ -4,26 +4,17 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import pl.weekendflyer.weekendFlightAgent.domain.model.FlightOffer;
-import pl.weekendflyer.weekendFlightAgent.domain.model.FlightSegment;
 import pl.weekendflyer.weekendFlightAgent.domain.model.TripConstraints;
 
 import java.time.LocalTime;
-import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static pl.weekendflyer.weekendFlightAgent.domain.eval.FlightOfferTestHelper.*;
 
-/**
- * Testy jednostkowe dla TripEvaluator.isSaturdayFull().
- * Weryfikuje poprawność sprawdzania reguł soboty weekendowej.
- */
 class TripEvaluatorSaturdayRuleTest {
-
-    private static final ZoneId ROME_ZONE = ZoneId.of("Europe/Rome");
-    private static final String ORIGIN = "WAW";
-    private static final String DESTINATION = "FCO";
 
     private TripEvaluator evaluator;
     private TripConstraints defaultConstraints;
@@ -32,12 +23,8 @@ class TripEvaluatorSaturdayRuleTest {
     void setUp() {
         evaluator = new TripEvaluator();
         defaultConstraints = new TripConstraints(
-                1,                              // maxStops
-                480,                            // maxTotalDurationMinutesOneWay
-                null,                           // hardCapPricePln (nieistotne)
-                LocalTime.of(22, 0),           // latestArrivalOnFridayLocal
-                LocalTime.of(6, 0),            // earliestDepartureOnSundayLocal
-                true                            // requireNoFlightOnSaturday
+                1, 480, null,
+                LocalTime.of(22, 0), LocalTime.of(6, 0), true
         );
     }
 
@@ -247,25 +234,16 @@ class TripEvaluatorSaturdayRuleTest {
     @Test
     @DisplayName("Brak segmentów outbound => false")
     void shouldReturnFalse_whenNoOutboundSegments() {
-        // given
-        FlightOffer offer = new FlightOffer(
-                ORIGIN,
-                DESTINATION,
-                List.of(), // brak segmentów outbound
+        FlightOffer offer = buildOffer(
+                List.of(),
                 List.of(createSegment(
                         ZonedDateTime.of(2026, 1, 18, 10, 0, 0, 0, ROME_ZONE),
                         ZonedDateTime.of(2026, 1, 18, 13, 0, 0, 0, ROME_ZONE)
                 )),
-                500,
-                "TestProvider",
-                "https://test.com"
+                500
         );
 
-        // when
-        boolean result = evaluator.isSaturdayFull(offer, defaultConstraints);
-
-        // then
-        assertFalse(result, "Sobota nie powinna być uznana za pełną przy braku segmentów outbound");
+        assertFalse(evaluator.isSaturdayFull(offer, defaultConstraints));
     }
 
     @Test
@@ -292,39 +270,7 @@ class TripEvaluatorSaturdayRuleTest {
         // when
         boolean result = evaluator.isSaturdayFull(offer, null);
 
-        // then
         assertFalse(result, "Sobota nie powinna być uznana za pełną dla null constraints");
-    }
-
-    /**
-     * Helper do budowania FlightOffer z jednym segmentem outbound i jednym inbound.
-     */
-    private FlightOffer buildOffer(ZonedDateTime outboundDep, ZonedDateTime outboundArr,
-                                     ZonedDateTime inboundDep, ZonedDateTime inboundArr) {
-        FlightSegment outboundSegment = createSegment(outboundDep, outboundArr);
-        FlightSegment inboundSegment = createSegment(inboundDep, inboundArr);
-
-        return new FlightOffer(
-                ORIGIN,
-                DESTINATION,
-                List.of(outboundSegment),
-                List.of(inboundSegment),
-                500,
-                "TestProvider",
-                "https://test.com"
-        );
-    }
-
-    /**
-     * Helper do tworzenia FlightSegment.
-     */
-    private FlightSegment createSegment(ZonedDateTime departure, ZonedDateTime arrival) {
-        return new FlightSegment(
-                ORIGIN,
-                DESTINATION,
-                departure,
-                arrival
-        );
     }
 }
 

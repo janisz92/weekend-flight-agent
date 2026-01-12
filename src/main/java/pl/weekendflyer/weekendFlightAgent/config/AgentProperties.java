@@ -18,20 +18,17 @@ public record AgentProperties(
         Alerts alerts
 ) {
 
-    // agent.search.*
     public record Search(
             int horizonDays,
             List<Integer> fullDaysAllowed
     ) {}
 
-    // agent.saturdayRule.*
     public record SaturdayRule(
             boolean requireNoFlightOnSaturday,
             LocalTime latestArrivalOnFridayLocal,
             LocalTime earliestDepartureOnSundayLocal
     ) {}
 
-    // agent.constraints.*
     public record Constraints(
             int maxStops,
             int maxTotalDurationMinutesOneWay,
@@ -40,7 +37,6 @@ public record AgentProperties(
             LocalTime latestArrivalToOriginLocal
     ) {}
 
-    // agent.baseline.*
     public record Baseline(
             int rollingDays,
             SegmentKey segmentKey
@@ -51,14 +47,12 @@ public record AgentProperties(
         ) {}
     }
 
-    // agent.candidateFilter.*
     public record CandidateFilter(
             int minAbsoluteSavingPLN,
             int minPercentBelowMedian,
             int maxCandidatesPerRun
     ) {}
 
-    // agent.alerts.*
     public record Alerts(
             String channel,
             int maxAlertsPerDay,

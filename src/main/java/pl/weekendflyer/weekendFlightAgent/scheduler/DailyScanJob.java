@@ -13,18 +13,13 @@ public class DailyScanJob {
 
     private final AgentProperties props;
 
-    @Scheduled(cron = "0 10 7 * * *", zone = "Europe/Warsaw")
+    @Scheduled(cron = "0 10 7 * * *", zone = "${agent.timezone:Europe/Warsaw}")
     public void runDailyScan() {
-        log.info("Daily scan started.");
-        log.info("Config loaded: tz={}, origins={}, destinations={}, horizonDays={}, fullDaysAllowed={}",
-                props.timezone(),
+        log.info("Daily scan started - origins={}, destinations={}, horizonDays={}",
                 props.origins(),
                 props.destinations().size(),
-                props.search().horizonDays(),
-                props.search().fullDaysAllowed()
+                props.search().horizonDays()
         );
-
-        log.info("Stage 1 dry-run: next steps later -> generate trip windows, call provider, persist results.");
         log.info("Daily scan finished.");
     }
 }
