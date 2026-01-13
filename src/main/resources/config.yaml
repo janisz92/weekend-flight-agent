@@ -54,3 +54,10 @@ agent:
     channel: "TELEGRAM"   # albo EMAIL
     maxAlertsPerDay: 3
     maxAlertsPerDestinationPerWeek: 1
+
+  planner:
+    maxWindowsPerDestinationPerDepartDate: 3
+    maxWindowsGlobal: 500
+    minRecheckIntervalHours: 12
+    dailyBudgetPerProvider: 100
+

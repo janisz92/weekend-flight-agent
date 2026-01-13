@@ -78,6 +78,14 @@ public class AgentPropertiesLoader {
                 (Integer) alertsMap.get("maxAlertsPerDestinationPerWeek")
         );
 
+        Map<String, Object> plannerMap = (Map<String, Object>) agent.get("planner");
+        AgentProperties.Planner planner = new AgentProperties.Planner(
+                (Integer) plannerMap.get("maxWindowsPerDestinationPerDepartDate"),
+                (Integer) plannerMap.get("maxWindowsGlobal"),
+                (Integer) plannerMap.get("minRecheckIntervalHours"),
+                (Integer) plannerMap.get("dailyBudgetPerProvider")
+        );
+
         return new AgentProperties(
                 timezone,
                 origins,
@@ -87,7 +95,8 @@ public class AgentPropertiesLoader {
                 constraints,
                 baseline,
                 candidateFilter,
-                alerts
+                alerts,
+                planner
         );
     }
 }

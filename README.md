@@ -33,19 +33,27 @@ Weekend Flight Agent to aplikacja automatyzująca proces wyszukiwania okazji na 
 
 ### Zaimplementowane
 - Konfiguracja wielokryterialna (strefy czasowe, lotniska, ograniczenia)
-- Modele domenowe (FlightOffer, TripWindow, TripConstraints)
+- Modele domenowe (FlightOffer, TripWindow, TripConstraints, CandidateWindow, PlannerResult)
 - Encje JPA (PriceObservation, WindowCheck) z Lombok
 - Ewaluator ofert z deterministyczną logiką:
   - Obliczanie pełnych dni w destynacji
   - Walidacja reguł soboty weekendowej
   - Sprawdzanie twardych ograniczeń (przesiadki, czas lotu, cena)
-- Scheduled job (codziennie o 07:10)
+- **Generator okien podróży (TripWindowGenerator)**:
+  - Generowanie kandydackich okien na podstawie horizonDays i fullDaysAllowed
+  - Filtrowanie tylko okien z sobotą w środku
+  - Limity per (destination, departDate) i globalny
+- **Planner okien (WindowCheckPlanner)**:
+  - Inteligentny wybór okien do sprawdzenia
+  - Priorytet: nowe -> bliższe daty -> mniej sprawdzane
+  - Budżet dzienny per provider
+  - Tracking lastCheckedAt i checkCount w DB
+- Scheduled job (codziennie o 07:10) z integracją generatora i planera
 - Persystencja z Flyway migrations
 - Repozytoria Spring Data JPA
-- Kompleksowe testy jednostkowe
+- Kompleksowe testy jednostkowe i integracyjne
 
 ### W planach
-- Generowanie okien podróży (TripWindow)
 - Integracja z API dostawców lotów (Skyscanner, Kiwi.com)
 - Baseline tracking (śledzenie median cenowych)
 - Filtrowanie kandydatów (porównanie z baseline)
@@ -224,17 +232,26 @@ weekend-flight-agent/
 ├── src/main/java/pl/weekendflyer/weekendFlightAgent/
 │   ├── WeekendFlightAgentApplication.java    # Klasa główna
 │   ├── config/
-│   │   └── AgentProperties.java              # Mapowanie config.yaml
+│   │   ├── AgentProperties.java              # Mapowanie config.yaml
+│   │   ├── AgentPropertiesLoader.java        # Loader dla config.yaml
+│   │   ├── ClockConfig.java                  # Bean Clock (Europe/Warsaw)
+│   │   └── PlannerConfig.java                # Beany TripWindowGenerator, WindowCheckPlanner
 │   ├── scheduler/
 │   │   └── DailyScanJob.java                 # Codzienne zadanie (7:10)
 │   └── domain/
 │       ├── model/                            # Modele domenowe
 │       │   ├── FlightOffer.java              # Oferta lotu (round-trip)
 │       │   ├── FlightSegment.java            # Segment lotu
-│       │   ├── TripWindow.java               # Okno podróży
+│       │   ├── TripWindow.java               # Okno podróży (ZonedDateTime)
+│       │   ├── CandidateWindow.java          # Kandydackie okno (LocalDate)
+│       │   ├── PlannerResult.java            # Wynik planowania
 │       │   ├── TripConstraints.java          # Ograniczenia
 │       │   ├── PriceObservation.java         # Encja JPA - obserwacja ceny
 │       │   └── WindowCheck.java              # Encja JPA - sprawdzone okna
+│       ├── planner/                          # Generowanie i planowanie okien
+│       │   ├── TripWindowGenerator.java      # Generator kandydackich okien
+│       │   ├── WindowCheckPlanner.java       # Planner z priorytetami i budżetem
+│       │   └── WindowKeyGenerator.java       # Generator kluczy okien
 │       ├── eval/                             # Ewaluacja ofert
 │       │   ├── TripEvaluator.java            # Główna logika oceny
 │       │   └── TripConstraintsFactory.java   # Factory dla constraints
@@ -310,11 +327,50 @@ TripConstraints(
 )
 ```
 
+### CandidateWindow (record)
+Kandydackie okno podróży używane przez generator i planner (oparte na LocalDate).
+
+```java
+CandidateWindow(
+    String origin,          // "WAW"
+    String destination,     // "LIS"
+    LocalDate departDate,   // Data wylotu
+    LocalDate returnDate    // Data powrotu
+)
+```
+
+Metody:
+- `fullDays()` - oblicza `ChronoUnit.DAYS.between(departDate, returnDate) - 1`
+- `windowKey()` - generuje klucz w formacie `origin-destination-departDate-returnDate` (np. `WAW-LIS-2026-01-16-2026-01-18`)
+- `hasSaturdayInMiddle()` - sprawdza czy sobota ∈ (departDate, returnDate), tj. sobota nie może być dniem wylotu ani powrotu
+
+Walidacja w konstruktorze:
+- `returnDate` musi być po `departDate`
+- `fullDays` musi być >= 1
+
+### PlannerResult (record)
+Wynik działania WindowCheckPlanner.
+
+```java
+PlannerResult(
+    List<CandidateWindow> selected,   // Wybrane okna do sprawdzenia
+    int totalCandidates,              // Łączna liczba kandydatów
+    int skippedRecentlyChecked,       // Pominięte (sprawdzone zbyt niedawno)
+    int skippedBudget,                // Pominięte (przekroczony budżet)
+    int selectedCount                 // Liczba wybranych
+)
+```
+
 ### PriceObservation (encja JPA)
 Obserwacja cenowa zapisywana w bazie danych.
 
 ### WindowCheck (encja JPA)
 Śledzenie sprawdzonych okien czasowych.
+
+Kluczowe pola:
+- `windowKey` - unikalny klucz okna (format: `origin-destination-departDate-returnDate`)
+- `lastCheckedAt` - timestamp ostatniego sprawdzenia
+- `checkCount` - licznik sprawdzeń
 
 ## Ewaluacja ofert
 
@@ -395,10 +451,74 @@ src/test/java/
 - [x] Repozytoria Spring Data JPA
 - [x] Testy jednostkowe
 
-### Faza 2: Generowanie okien (w toku)
-- [ ] Generator TripWindow na podstawie horizonDays i fullDaysAllowed
-- [ ] Filtrowanie według earliestDeparture/latestArrival z origin
-- [ ] Optymalizacja liczby zapytań do API
+### Faza 2: Generowanie okien i planowanie - ETAP 4 (zrealizowane)
+
+#### Opis
+
+ETAP 4 implementuje generowanie kandydackich okien podróży oraz inteligentne planowanie, które okna sprawdzić danego dnia.
+
+#### Kluczowe koncepty
+
+**CandidateWindow** - kandydackie okno oparte na `LocalDate`:
+- `fullDays = daysBetween(departDate, returnDate) - 1`
+- Sobota w środku: `Saturday ∈ (departDate, returnDate)` - sobota musi być w przedziale otwartym, nie może być dniem wylotu ani powrotu
+- `windowKey` format: `{origin}-{destination}-{departDate}-{returnDate}` (np. `WAW-LIS-2026-01-16-2026-01-18`)
+
+**TripWindowGenerator** - generuje wszystkie możliwe okna:
+- Iteruje po origins × destinations × departDate × fullDaysAllowed
+- Filtruje tylko okna z `hasSaturdayInMiddle() == true`
+- Limity:
+  - `maxWindowsPerDestinationPerDepartDate` - max okien dla pary (destination, departDate)
+  - `maxWindowsGlobal` - globalny limit wygenerowanych okien
+- Deterministyczne sortowanie (origin, destination, departDate, returnDate)
+
+**WindowCheckPlanner** - wybiera podzbiór okien do sprawdzenia:
+- `dailyBudgetPerProvider` - max okien do sprawdzenia dziennie per provider
+- `minRecheckIntervalHours` - minimalny czas od ostatniego sprawdzenia
+- Priorytet wyboru:
+  1. Nowe okna (brak w DB) przed już sprawdzonymi
+  2. Bliższe `departDate` wyżej
+  3. Niższy `checkCount` wyżej
+  4. `windowKey` jako tie-breaker (deterministycznie)
+- Stan w DB (tabela `window_check`):
+  - `lastCheckedAt` - aktualizowane przy każdym sprawdzeniu
+  - `checkCount` - inkrementowane przy każdym sprawdzeniu
+
+#### Konfiguracja (config.yaml)
+
+```yaml
+agent:
+  planner:
+    maxWindowsPerDestinationPerDepartDate: 3   # Max okien per (destination, departDate)
+    maxWindowsGlobal: 500                      # Globalny limit kandydatów
+    minRecheckIntervalHours: 12                # Min. przerwa między sprawdzeniami
+    dailyBudgetPerProvider: 100                # Dzienny budżet per provider
+```
+
+#### Integracja z DailyScanJob
+
+Job codziennie o 7:10:
+1. Generuje kandydatów: `tripWindowGenerator.generate(origins, destinations, horizonDays, fullDaysAllowed)`
+2. Planuje: `windowCheckPlanner.plan("default", candidates)`
+3. Loguje statystyki: `totalCandidates`, `selectedCount`, `skippedRecentlyChecked`, `skippedBudget`
+4. Aktualizuje `window_check` w DB (lastCheckedAt, checkCount)
+
+#### Checklist Done - ETAP 4
+
+- [x] `CandidateWindow` record z metodami `fullDays()`, `windowKey()`, `hasSaturdayInMiddle()`
+- [x] `WindowKeyGenerator` - generator kluczy okien
+- [x] `PlannerResult` record ze statystykami
+- [x] `TripWindowGenerator` z limitami i filtrowaniem soboty
+- [x] `WindowCheckPlanner` z priorytetami i budżetem
+- [x] `WindowCheckRepository` rozszerzony o `findByProviderAndWindowKeyIn()`
+- [x] Konfiguracja `AgentProperties.Planner`
+- [x] Bean `Clock` (Europe/Warsaw)
+- [x] Beany `TripWindowGenerator` i `WindowCheckPlanner`
+- [x] `DailyScanJob` integruje generator i planner
+- [x] Testy `TripWindowGeneratorTest` (14 scenariuszy)
+- [x] Testy `WindowCheckPlannerTest` (10 scenariuszy)
+- [x] Testy `CandidateWindowTest` i `WindowKeyGeneratorTest`
+- [x] Test integracyjny `DailyScanJobIntegrationTest`
 
 ### Faza 3: Integracja z providerami
 - [ ] Adapter dla Skyscanner API

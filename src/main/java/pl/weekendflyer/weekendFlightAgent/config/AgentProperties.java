@@ -15,7 +15,8 @@ public record AgentProperties(
         Constraints constraints,
         Baseline baseline,
         CandidateFilter candidateFilter,
-        Alerts alerts
+        Alerts alerts,
+        Planner planner
 ) {
 
     public record Search(
@@ -57,5 +58,12 @@ public record AgentProperties(
             String channel,
             int maxAlertsPerDay,
             int maxAlertsPerDestinationPerWeek
+    ) {}
+
+    public record Planner(
+            int maxWindowsPerDestinationPerDepartDate,
+            int maxWindowsGlobal,
+            int minRecheckIntervalHours,
+            int dailyBudgetPerProvider
     ) {}
 }
