@@ -54,11 +54,4 @@ public class PriceObservation {
 
     @Column(name = "price_pln", nullable = false)
     private Integer pricePln;
-
-    @PrePersist
-    void prePersist() {
-        if (observedAt == null) {
-            observedAt = Instant.now();
-        }
-    }
 }
