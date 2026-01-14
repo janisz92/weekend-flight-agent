@@ -35,14 +35,17 @@ public record CandidateWindow(
     }
 
     public boolean hasSaturdayInMiddle() {
-        LocalDate day = departDate.plusDays(1);
-        while (day.isBefore(returnDate)) {
-            if (day.getDayOfWeek() == DayOfWeek.SATURDAY) {
-                return true;
-            }
-            day = day.plusDays(1);
+        LocalDate firstMiddleDay = departDate.plusDays(1);
+        LocalDate lastMiddleDay = returnDate.minusDays(1);
+
+        if (firstMiddleDay.isAfter(lastMiddleDay)) {
+            return false;
         }
-        return false;
+
+        int daysUntilSaturday = (DayOfWeek.SATURDAY.getValue() - firstMiddleDay.getDayOfWeek().getValue() + 7) % 7;
+        LocalDate nextSaturday = firstMiddleDay.plusDays(daysUntilSaturday);
+
+        return !nextSaturday.isAfter(lastMiddleDay);
     }
 }
 

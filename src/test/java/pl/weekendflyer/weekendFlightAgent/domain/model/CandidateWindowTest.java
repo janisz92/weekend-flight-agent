@@ -111,6 +111,34 @@ class CandidateWindowTest {
     }
 
     @Test
+    void hasSaturdayInMiddleShouldReturnTrueWhenFirstMiddleDayIsSaturday() {
+        // departDate: 2026-01-16 (piątek), returnDate: 2026-01-18 (niedziela)
+        // środek: tylko sobota (2026-01-17)
+        // firstMiddleDay == lastMiddleDay == sobota
+        CandidateWindow window = new CandidateWindow(
+                "WAW", "LIS",
+                LocalDate.of(2026, 1, 16),
+                LocalDate.of(2026, 1, 18)
+        );
+
+        assertTrue(window.hasSaturdayInMiddle());
+    }
+
+    @Test
+    void hasSaturdayInMiddleShouldReturnFalseWhenSingleMiddleDayIsNotSaturday() {
+        // departDate: 2026-01-15 (czwartek), returnDate: 2026-01-17 (sobota)
+        // środek: tylko piątek (2026-01-16)
+        // firstMiddleDay == lastMiddleDay == piątek (nie sobota)
+        CandidateWindow window = new CandidateWindow(
+                "WAW", "LIS",
+                LocalDate.of(2026, 1, 15),
+                LocalDate.of(2026, 1, 17)
+        );
+
+        assertFalse(window.hasSaturdayInMiddle());
+    }
+
+    @Test
     void shouldThrowExceptionWhenReturnDateIsNotAfterDepartDate() {
         assertThrows(IllegalArgumentException.class, () ->
                 new CandidateWindow(

@@ -10,8 +10,8 @@ import java.time.ZoneId;
 public class ClockConfig {
 
     @Bean
-    public Clock clock() {
-        return Clock.system(ZoneId.of("Europe/Warsaw"));
+    public Clock clock(AgentProperties agentProperties) {
+        return Clock.system(ZoneId.of(agentProperties.timezone()));
     }
 }
 

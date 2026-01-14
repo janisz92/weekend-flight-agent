@@ -79,8 +79,7 @@ public class WindowCheckPlanner {
             if (check == null) {
                 check = createNewWindowCheck(provider, candidate, now);
             } else {
-                check.setLastCheckedAt(now);
-                check.setCheckCount(check.getCheckCount() + 1);
+                check.markChecked(now, now);
             }
 
             toSave.add(check);
@@ -126,6 +125,8 @@ public class WindowCheckPlanner {
         check.setWindowKey(candidate.windowKey());
         check.setLastCheckedAt(now);
         check.setCheckCount(1);
+        check.setCreatedAt(now);
+        check.setUpdatedAt(now);
         return check;
     }
 }

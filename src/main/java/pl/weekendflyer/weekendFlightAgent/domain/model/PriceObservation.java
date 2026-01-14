@@ -28,10 +28,10 @@ public class PriceObservation {
     @Column(name = "provider", nullable = false)
     private String provider;
 
-    @Column(name = "origin", nullable = false, length = 3)
+    @Column(name = "origin", nullable = false, columnDefinition = "bpchar(3)")
     private String origin;
 
-    @Column(name = "destination", nullable = false, length = 3)
+    @Column(name = "destination", nullable = false, columnDefinition = "bpchar(3)")
     private String destination;
 
     @Column(name = "depart_date", nullable = false)

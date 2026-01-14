@@ -13,6 +13,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 public class TripWindowGenerator {
@@ -43,7 +44,6 @@ public class TripWindowGenerator {
         List<CandidateWindow> allCandidates = new ArrayList<>();
         Set<String> seenWindowKeys = new HashSet<>();
         Map<String, Integer> countPerDestinationDepartDate = new HashMap<>();
-        Map<String, Integer> countPerDestination = new HashMap<>();
 
         for (String origin : origins) {
             for (String destination : destinations) {
@@ -86,7 +86,6 @@ public class TripWindowGenerator {
                     for (int i = 0; i < Math.min(windowsForDestDepartDate.size(), remaining); i++) {
                         allCandidates.add(windowsForDestDepartDate.get(i));
                         countPerDestinationDepartDate.merge(destDepartKey, 1, Integer::sum);
-                        countPerDestination.merge(destination, 1, Integer::sum);
                     }
                 }
             }
@@ -99,14 +98,19 @@ public class TripWindowGenerator {
                 .thenComparing(CandidateWindow::returnDate));
 
         List<CandidateWindow> result = allCandidates.size() > maxWindowsGlobal
-                ? allCandidates.subList(0, maxWindowsGlobal)
+                ? new ArrayList<>(allCandidates.subList(0, maxWindowsGlobal))
                 : allCandidates;
 
         log.info("Generated {} candidate windows (global limit: {})", result.size(), maxWindowsGlobal);
-        countPerDestination.forEach((dest, count) ->
-                log.debug("Destination {}: {} windows", dest, count));
 
-        return new ArrayList<>(result);
+        if (log.isDebugEnabled()) {
+            Map<String, Long> finalCountPerDestination = result.stream()
+                    .collect(Collectors.groupingBy(CandidateWindow::destination, Collectors.counting()));
+            finalCountPerDestination.forEach((dest, count) ->
+                    log.debug("Destination {}: {} windows", dest, count));
+        }
+
+        return result;
     }
 }
 

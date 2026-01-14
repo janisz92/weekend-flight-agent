@@ -273,8 +273,8 @@ class WindowCheckPlannerTest {
         check.setWindowKey(candidate.windowKey());
         check.setLastCheckedAt(lastCheckedAt);
         check.setCheckCount(checkCount);
-        check.setCreatedAt(Instant.now());
-        check.setUpdatedAt(Instant.now());
+        check.setCreatedAt(fixedNow);
+        check.setUpdatedAt(fixedNow);
         return check;
     }
 }

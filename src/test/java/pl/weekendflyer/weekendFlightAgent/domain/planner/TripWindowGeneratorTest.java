@@ -297,5 +297,33 @@ class TripWindowGeneratorTest {
         assertTrue(lisCount > 0);
         assertTrue(bcnCount > 0);
     }
+
+    @Test
+    void shouldReturnEmptyListWhenHorizonDaysIsZero() {
+        TripWindowGenerator generator = new TripWindowGenerator(fixedClock, 100, 1000);
+
+        List<CandidateWindow> windows = generator.generate(
+                List.of("WAW"),
+                List.of("LIS"),
+                0,
+                List.of(1, 2, 3)
+        );
+
+        assertTrue(windows.isEmpty());
+    }
+
+    @Test
+    void shouldReturnEmptyListWhenHorizonDaysIsOne() {
+        TripWindowGenerator generator = new TripWindowGenerator(fixedClock, 100, 1000);
+
+        List<CandidateWindow> windows = generator.generate(
+                List.of("WAW"),
+                List.of("LIS"),
+                1,
+                List.of(1, 2, 3)
+        );
+
+        assertTrue(windows.isEmpty());
+    }
 }
 

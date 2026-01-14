@@ -25,10 +25,10 @@ public class WindowCheck {
     @Column(name = "provider", nullable = false)
     private String provider;
 
-    @Column(name = "origin", nullable = false, length = 3)
+    @Column(name = "origin", nullable = false, columnDefinition = "bpchar(3)")
     private String origin;
 
-    @Column(name = "destination", nullable = false, length = 3)
+    @Column(name = "destination", nullable = false, columnDefinition = "bpchar(3)")
     private String destination;
 
     @Column(name = "depart_date", nullable = false)
@@ -52,23 +52,10 @@ public class WindowCheck {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    @PrePersist
-    void prePersist() {
-        Instant now = Instant.now();
-        if (createdAt == null) {
-            createdAt = now;
-        }
-        if (updatedAt == null) {
-            updatedAt = now;
-        }
-        if (checkCount == null) {
-            checkCount = 0;
-        }
-    }
-
-    @PreUpdate
-    void preUpdate() {
-        updatedAt = Instant.now();
+    public void markChecked(Instant checkedAt, Instant updatedAtNow) {
+        this.lastCheckedAt = checkedAt;
+        this.checkCount = (this.checkCount != null ? this.checkCount : 0) + 1;
+        this.updatedAt = updatedAtNow;
     }
 }
 
